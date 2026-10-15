@@ -1,93 +1,95 @@
-# Enabling Gemini Integration instead of Watson
+import os
+import logging
+import mimetypes
+from io import BytesIO
+from pathlib import Path
+
+import requests
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types
-# Removal of existing Watson integration
-'''from ibm_watsonx_ai import Credentials, APIClient
-from ibm_watsonx_ai.foundation_models import ModelInference '''
-
-import json
-import os
-import base64
-import requests
 from langchain.tools import tool
 from PIL import Image
-from io import BytesIO
-from typing import List
-import logging
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-logging.info("Extracting ingredients from image...")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-''' Removed Watson Integration
-credentials = Credentials(
-                   url = "https://us-south.ml.cloud.ibm.com",
-                   # api_key = "<YOUR_API_KEY>" # Normally you'd put an API key here, but we've got you covered here
-                  )
-client = APIClient(credentials)
-project_id = "skills-network"
-'''
-## TODO: Define the tools for the NourishBot crew
+if not GEMINI_API_KEY:
+    raise EnvironmentError(
+        "GEMINI_API_KEY not found. Add it to the project's root .env file."
+    )
+
+client = genai.Client(api_key=GEMINI_API_KEY)
+MODEL_NAME = "gemini-3.8-flash"
+
 class ExtractIngredientsTool:
+
     @tool("Extract ingredients")
-    def extract_ingredient(image_input: str):
+    def extract_ingredient(image_input: str) -> str:
         """
-        Extract ingredients from a food item image.
+        Identify the visible food ingredients in an image.
 
         Args:
-            image_input: Local image file path or remote image URL.
+            image_input: Local image path or publicly accessible image URL.
 
         Returns:
-            Ingredients identified in the image.
+            A text description of the identified ingredients.
         """
-        # Step 1: Read the image
-        if image_input.startswith("http"):
-            response = requests.get(image_input)
+        logger.info("Extracting ingredients using Gemini")
+
+        # Read the image from a URL or local file.
+        if image_input.startswith(("http://", "https://")):
+            response = requests.get(image_input, timeout=30)
             response.raise_for_status()
-            image_bytes = BytesIO(response.content)
+            image_bytes = response.content
         else:
-            if not os.path.isfile(image_input):
+            image_path = Path(image_input).expanduser()
+
+            if not image_path.is_file():
                 raise FileNotFoundError(
-                    f"No file found at path: {image_input}"
+                    f"No image file found at: {image_input}"
                 )
 
-            with open(image_input, "rb") as file:
-                image_bytes = BytesIO(file.read())
+            image_bytes = image_path.read_bytes()
 
-        # Step 2: Encode the image in Base64
-        encoded_image = base64.b64encode(
-            image_bytes.read()
-        ).decode("utf-8")
+        # Validate the image and determine its MIME type.
+        try:
+            image = Image.open(BytesIO(image_bytes))
+            image.load()
+        except Exception as exc:
+            raise ValueError(
+                "The supplied input is not a valid supported image."
+            ) from exc
 
-        # Step 3: Initialize the vision model
-        model = ModelInference(
-            model_id="meta-llama/llama-4-maverick-17b-128e-instruct-fp8",
-            credentials=credentials,
-            project_id=project_id,
-            params={"max_tokens": 300},
+        mime_type = Image.MIME.get(image.format)
+
+        if not mime_type:
+            mime_type = mimetypes.guess_type(image_input)[0]
+
+        if not mime_type or not mime_type.startswith("image/"):
+            raise ValueError("Could not determine the image format.")
+
+        # Send the image and prompt to Gemini.
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[
+                (
+                    "Identify the visible food ingredients in this image. "
+                    "Return a concise, readable list of ingredients. "
+                    "Do not invent ingredients that cannot reasonably be "
+                    "identified from the image. If uncertain, say so."
+                ),
+                genai.types.Part.from_bytes(
+                    data=image_bytes,
+                    mime_type=mime_type,
+                ),
+            ],
         )
 
-        # Step 4: Send the image and prompt to the model
-        response = model.chat(
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Extract ingredients from the food item image",
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": "data:image/jpeg;base64," + encoded_image
-                            },
-                        },
-                    ],
-                }
-            ]
-        )
+        if not response.text:
+            raise RuntimeError("Gemini returned an empty response.")
 
-        # Step 5: Return the model's response
-        return response["choices"][0]["message"]["content"]
+        return response.text.strip()
