@@ -1,28 +1,32 @@
 ingredient_detection_task:
   description: >
-    Detect the ingredients from the {uploaded_image} using an advanced vision model and filter the raw list.
+    Identify ingredients visible in the supplied image using the
+    ingredient extraction tool. Do not invent ingredients.
   agent: ingredient_detection_agent
   expected_output: >
-    A list of detected ingredients from the image.
+    A list of identified ingredients, including uncertainty where relevant.
 
 dietary_filtering_task:
   description: >
-    Filter the detected ingredients based on user-provided {dietary_restrictions}.
+    Clean the extracted ingredients, then filter them according to
+    the user's dietary restrictions.
   agent: dietary_filtering_agent
   expected_output: >
-    A list of filtered ingredients based on dietary restrictions.
+    A cleaned list of ingredients compatible with the user's restrictions.
 
 nutrient_analysis_task:
   description: >
-    Provide a detailed breakdown of key nutrients such as protein, carbohydrates, fats, vitamins, and minerals based on {uploaded_image}; 
-    as well the caloric content of the food. Ends with a health evaluation for the dish.
+    Estimate the calories, macronutrients, and relevant micronutrients
+    of the filtered ingredients. Clearly state assumptions and uncertainty.
   agent: nutrient_analysis_agent
   expected_output: >
-    Nutrient analysis based on the calorie estimation.
+    A nutritional report containing estimates and their limitations.
 
 recipe_suggestion_task:
   description: >
-    Generate recipe ideas using the filtered ingredients and ensure they fit within the user’s calorie goal and dietary restrictions.
+    Generate recipes using the filtered ingredients, nutritional analysis,
+    dietary restrictions, and calorie goal. Include ingredient quantities,
+    preparation steps, serving sizes, and estimated nutrition.
   agent: recipe_suggestion_agent
   expected_output: >
-    Suggested recipes based on the filtered ingredients.
+    Practical recipe suggestions with estimated nutritional values.

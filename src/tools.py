@@ -290,3 +290,118 @@ class NutrientAnalysisTool:
             )
 
         return response.text.strip()
+
+class RecipeSuggestionTool:
+
+    @tool("Suggest recipes")
+    def suggest_recipes(
+        ingredients: str,
+        dietary_restrictions: str = "None",
+        calorie_goal: str = "Not specified",
+        nutrient_analysis: str = "Not available",
+        servings: str = "1",
+    ) -> str:
+        """
+        Suggest recipes using available ingredients and nutritional goals.
+
+        Args:
+            ingredients: Ingredients available and compatible with
+                the user's dietary restrictions.
+            dietary_restrictions: User's dietary requirements.
+            calorie_goal: Target calories per serving or meal.
+            nutrient_analysis: Available nutritional analysis.
+            servings: Number of servings requested.
+
+        Returns:
+            Recipe suggestions with instructions and estimated nutrition.
+        """
+        logger.info("Generating recipe suggestions using Gemini")
+
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[
+                f"""
+                You are a recipe recommendation assistant.
+
+                Suggest practical recipes using the information below.
+
+                AVAILABLE INGREDIENTS:
+                {ingredients}
+
+                DIETARY RESTRICTIONS:
+                {dietary_restrictions}
+
+                CALORIE GOAL:
+                {calorie_goal}
+
+                AVAILABLE NUTRITIONAL ANALYSIS:
+                {nutrient_analysis}
+
+                NUMBER OF SERVINGS:
+                {servings}
+
+                REQUIREMENTS:
+
+                1. RECIPE SELECTION
+                   - Suggest 2 or 3 distinct recipes.
+                   - Prioritize the available ingredients.
+                   - Do not use ingredients that clearly violate the
+                     user's dietary restrictions.
+                   - Do not treat uncertain ingredients as confirmed.
+                   - Clearly identify any additional ingredients needed.
+                   - Separate optional pantry ingredients from essential
+                     ingredients that are not available.
+
+                2. CALORIE GOAL
+                   - Aim to meet the calorie goal when one is provided.
+                   - Clarify whether the target refers to one serving
+                     or the entire meal if that information is available.
+                   - Do not claim a recipe meets the goal when its
+                     estimated calories exceed the target.
+                   - If the goal is unspecified, do not invent one.
+
+                3. FOR EACH RECIPE, INCLUDE
+                   - Recipe name.
+                   - Brief description.
+                   - Ingredients and quantities.
+                   - Preparation steps in the correct order.
+                   - Estimated preparation and cooking time.
+                   - Number of servings.
+                   - Estimated calories per serving.
+                   - Estimated protein, carbohydrates, and fat per serving.
+                   - Any relevant nutritional benefits.
+
+                4. NUTRITIONAL ACCURACY
+                   - Nutritional values must be estimates, not verified facts.
+                   - Use reasonable ingredient quantities for the stated
+                     number of servings.
+                   - Account for cooking oil and additional ingredients
+                     when estimating nutrition.
+                   - If the available information is insufficient,
+                     state the assumptions.
+                   - Do not invent precise nutritional values.
+
+                5. DIETARY SAFETY
+                   - Respect the stated dietary restrictions.
+                   - Do not assume an ingredient is allergen-free when
+                     its composition is uncertain.
+                   - Flag uncertainty where ingredient labels or
+                     preparation methods would need to be checked.
+
+                6. FINAL RECOMMENDATION
+                   - Identify which suggested recipe best fits the
+                     available ingredients and stated calorie goal.
+                   - Briefly explain why.
+
+                Return a clear, structured response with headings
+                for each recipe.
+                """
+            ],
+        )
+
+        if not response.text:
+            raise RuntimeError(
+                "Gemini returned an empty recipe suggestion response."
+            )
+
+        return response.text.strip()
