@@ -1,0 +1,5 @@
+include:
+  - model_config.yaml
+
+litellm_settings:
+  callbacks: ["datadog"] 

@@ -15,17 +15,19 @@ from src.tools import (
 
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+WATSONX_URL = os.getenv("WATSONX_URL")
+WATSONX_APIKEY = os.getenv("WATSONX_APIKEY")
+WATSONX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
 
-if not GEMINI_API_KEY:
+if not all([WATSONX_URL, WATSONX_APIKEY, WATSONX_PROJECT_ID]):
     raise EnvironmentError(
-        "GEMINI_API_KEY not found. Add it to the project's root .env file."
+        "Watsonx credentials are missing. Check WATSONX_URL, "
+        "WATSONX_APIKEY, and WATSONX_PROJECT_ID in the root .env file."
     )
 
-# Configure CrewAI to use Gemini through LiteLLM.
-gemini_llm = LLM(
-    model="gemini/gemini-3.8-flash",
-    api_key=GEMINI_API_KEY,
+watsonx_llm = LLM(
+    model="watsonx/meta-llama/llama-3-3-70b-instruct",
+    project_id=WATSONX_PROJECT_ID,
 )
 
 CONFIG_DIR = Path(__file__).parent / "config"
@@ -59,7 +61,7 @@ class BaseNourishBotCrew:
 
         ingredient_agent = Agent(
             config=self.agents_config["ingredient_detection_agent"],
-            llm=gemini_llm,
+            llm=watsonx_llm,
             tools=[ExtractIngredientsTool.extract_ingredient],
             verbose=True,
             allow_delegation=False,
@@ -72,7 +74,7 @@ class BaseNourishBotCrew:
                 "You normalize ingredient names and remove irrelevant "
                 "visual details without inventing ingredients."
             ),
-            llm=gemini_llm,
+            llm=watsonx_llm,
             tools=[FilterIngredientsTool.filter_ingredients],
             verbose=True,
             allow_delegation=False,
@@ -80,7 +82,7 @@ class BaseNourishBotCrew:
 
         dietary_agent = Agent(
             config=self.agents_config["dietary_filtering_agent"],
-            llm=gemini_llm,
+            llm=watsonx_llm,
             tools=[DietaryFilterTool.filter_by_dietary_restrictions],
             verbose=True,
             allow_delegation=False,
@@ -88,7 +90,7 @@ class BaseNourishBotCrew:
 
         nutrition_agent = Agent(
             config=self.agents_config["nutrient_analysis_agent"],
-            llm=gemini_llm,
+            llm=watsonx_llm,
             tools=[NutrientAnalysisTool.analyze_nutrients],
             verbose=True,
             allow_delegation=False,
@@ -96,7 +98,7 @@ class BaseNourishBotCrew:
 
         recipe_agent = Agent(
             config=self.agents_config["recipe_suggestion_agent"],
-            llm=gemini_llm,
+            llm=watsonx_llm,
             tools=[RecipeSuggestionTool.suggest_recipes],
             verbose=True,
             allow_delegation=False,
