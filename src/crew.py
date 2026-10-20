@@ -1,14 +1,15 @@
 import os
-import yaml
 from pathlib import Path
 
+import yaml
 from dotenv import load_dotenv
 from crewai import Agent, Crew, LLM, Process, Task
 
+from src.models import NutrientAnalysisOutput, RecipeSuggestionOutput
 from src.tools import (
+    DietaryFilterTool,
     ExtractIngredientsTool,
     FilterIngredientsTool,
-    DietaryFilterTool,
     NutrientAnalysisTool,
     RecipeSuggestionTool,
 )
@@ -58,7 +59,6 @@ class BaseNourishBotCrew:
 
     def _create_agents(self):
         """Create specialized agents and assign their tools."""
-
         ingredient_agent = Agent(
             config=self.agents_config["ingredient_detection_agent"],
             llm=watsonx_llm,
@@ -71,8 +71,8 @@ class BaseNourishBotCrew:
             role="Ingredient Cleaning Specialist",
             goal="Clean and standardize the ingredients identified in the image.",
             backstory=(
-                "You normalize ingredient names and remove irrelevant "
-                "visual details without inventing ingredients."
+                "Normalize ingredient names and remove irrelevant visual "
+                "details without inventing ingredients."
             ),
             llm=watsonx_llm,
             tools=[FilterIngredientsTool.filter_ingredients],
@@ -113,8 +113,7 @@ class BaseNourishBotCrew:
         )
 
     def _create_tasks(self, agents):
-        """Create tasks and connect their outputs in sequence."""
-
+        """Create sequential tasks with lab-defined structured outputs."""
         (
             ingredient_agent,
             cleaning_agent,
@@ -123,81 +122,71 @@ class BaseNourishBotCrew:
             recipe_agent,
         ) = agents
 
-        ingredient_task = Task(
-            description="""
-                Use the Extract ingredients tool to identify the ingredients
-                visible in this image: {uploaded_image}.
+        ingredient_config = self.tasks_config["ingredient_detection_task"]
+        dietary_config = self.tasks_config["dietary_filtering_task"]
+        nutrition_config = self.tasks_config["nutrient_analysis_task"]
+        recipe_config = self.tasks_config["recipe_suggestion_task"]
 
-                Pass the image path to the tool. Report the tool's result
-                without inventing ingredients.
-            """,
-            expected_output="A list of ingredients identified in the image.",
+        ingredient_task = Task(
+            description=(
+                ingredient_config["description"]
+                + "\nUploaded image path: {uploaded_image}"
+            ),
+            expected_output=ingredient_config["expected_output"],
             agent=ingredient_agent,
         )
 
         cleaning_task = Task(
-            description="""
-                Use the Filter ingredients tool to clean and standardize
-                the output of the preceding ingredient identification task.
-
-                Preserve uncertainty and do not add ingredients.
-            """,
+            description=(
+                "Use the ingredient-cleaning tool to standardize the output "
+                "of the preceding ingredient detection task. Remove duplicates, "
+                "preserve uncertainty, and do not add ingredients."
+            ),
             expected_output="A cleaned and deduplicated ingredient list.",
             agent=cleaning_agent,
             context=[ingredient_task],
         )
 
         dietary_task = Task(
-            description="""
-                Apply these dietary restrictions: {dietary_restrictions}.
-
-                Use the dietary filtering tool with the cleaned ingredient
-                list from the preceding task. Exclude incompatible
-                ingredients and clearly identify uncertainty.
-            """,
-            expected_output="Ingredients compatible with the restrictions.",
+            description=(
+                dietary_config["description"]
+                + "\nDietary restrictions: {dietary_restrictions}. "
+                "Use the cleaned ingredients from the preceding task."
+            ),
+            expected_output=dietary_config["expected_output"],
             agent=dietary_agent,
             context=[cleaning_task],
         )
 
         nutrition_task = Task(
-            description="""
-                Analyze the nutritional content of the ingredients remaining
-                after dietary filtering.
-
-                Use the nutritional analysis tool. Supply the filtered
-                ingredients and these portion details: {portion_details}.
-
-                Clearly distinguish estimates from verified values.
-            """,
-            expected_output=(
-                "Estimated calories, macronutrients, relevant "
-                "micronutrients, and assumptions."
+            description=(
+                nutrition_config["description"]
+                + "\nImage path: {uploaded_image}"
+                + "\nPortion details: {portion_details}"
+                + "\nAnalyze the filtered ingredients supplied by the "
+                "preceding task. If the image is a complete dish, identify "
+                "the dish and estimate its nutrition. Clearly label estimates."
             ),
+            expected_output=nutrition_config["expected_output"],
             agent=nutrition_agent,
             context=[dietary_task],
+            output_json=NutrientAnalysisOutput,
         )
 
         recipe_task = Task(
-            description="""
-                Generate recipes using the ingredients that passed dietary
-                filtering.
-
-                Dietary restrictions: {dietary_restrictions}
-                Calorie goal: {calorie_goal}
-                Number of servings: {servings}
-
-                Use the recipe suggestion tool. Incorporate the nutritional
-                analysis from the preceding task. Provide ingredient
-                quantities, preparation instructions, and estimated
-                nutritional values per serving.
-            """,
-            expected_output=(
-                "Recipe suggestions with ingredients, instructions, "
-                "servings, estimated nutrition, and a recommendation."
+            description=(
+                recipe_config["description"]
+                + "\nDietary restrictions: {dietary_restrictions}"
+                + "\nCalorie goal: {calorie_goal}"
+                + "\nServings: {servings}"
+                + "\nUse only ingredients that passed dietary filtering. "
+                "Include quantities, instructions, and estimated calories "
+                "per serving. Do not invent certainty about nutrition."
             ),
+            expected_output=recipe_config["expected_output"],
             agent=recipe_agent,
             context=[dietary_task, nutrition_task],
+            output_json=RecipeSuggestionOutput,
         )
 
         return [
@@ -210,7 +199,6 @@ class BaseNourishBotCrew:
 
     def crew(self):
         """Build the complete sequential multi-agent crew."""
-
         agents = self._create_agents()
         tasks = self._create_tasks(agents)
 
@@ -223,7 +211,6 @@ class BaseNourishBotCrew:
 
     def run(self):
         """Execute the complete workflow."""
-
         return self.crew().kickoff(
             inputs={
                 "uploaded_image": str(self.image_data),
