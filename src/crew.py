@@ -123,6 +123,7 @@ class BaseNourishBotCrew:
         ) = agents
 
         ingredient_config = self.tasks_config["ingredient_detection_task"]
+        cleaning_config = self.tasks_config["ingredient_cleaning_task"]
         dietary_config = self.tasks_config["dietary_filtering_task"]
         nutrition_config = self.tasks_config["nutrient_analysis_task"]
         recipe_config = self.tasks_config["recipe_suggestion_task"]
@@ -137,12 +138,8 @@ class BaseNourishBotCrew:
         )
 
         cleaning_task = Task(
-            description=(
-                "Use the ingredient-cleaning tool to standardize the output "
-                "of the preceding ingredient detection task. Remove duplicates, "
-                "preserve uncertainty, and do not add ingredients."
-            ),
-            expected_output="A cleaned and deduplicated ingredient list.",
+            description=cleaning_config["description"],
+            expected_output=cleaning_config["expected_output"],
             agent=cleaning_agent,
             context=[ingredient_task],
         )
