@@ -1,32 +1,46 @@
 ingredient_detection_task:
   description: >
     Identify ingredients visible in the supplied image using the
-    ingredient extraction tool. Do not invent ingredients.
+    ingredient extraction tool. The uploaded image path is {uploaded_image}.
+    Do not invent ingredients; report uncertainty where relevant.
   agent: ingredient_detection_agent
   expected_output: >
     A list of identified ingredients, including uncertainty where relevant.
 
+ingredient_cleaning_task:
+  description: >
+    Standardize ingredient names from the previous task, remove duplicates,
+    and preserve uncertainty. Do not add ingredients that were not detected.
+  expected_output: >
+    A cleaned and deduplicated ingredient list.
+
 dietary_filtering_task:
   description: >
-    Clean the extracted ingredients, then filter them according to
-    the user's dietary restrictions.
+    Filter the cleaned ingredients according to these dietary restrictions:
+    {dietary_restrictions}. Use the dietary filtering tool and exclude
+    incompatible ingredients where the restriction can be determined.
   agent: dietary_filtering_agent
   expected_output: >
-    A cleaned list of ingredients compatible with the user's restrictions.
+    A cleaned list of ingredients compatible with the user's restrictions,
+    with uncertain cases clearly flagged.
 
 nutrient_analysis_task:
   description: >
-    Estimate the calories, macronutrients, and relevant micronutrients
-    of the filtered ingredients. Clearly state assumptions and uncertainty.
+    Estimate calories, macronutrients, and relevant micronutrients for the
+    filtered ingredients. Use portion details {portion_details}. Clearly
+    state assumptions and uncertainty; do not present estimates as verified facts.
   agent: nutrient_analysis_agent
   expected_output: >
-    A nutritional report containing estimates and their limitations.
+    A structured nutritional report containing estimated calories, nutrients,
+    portion details, a health evaluation, and limitations.
 
 recipe_suggestion_task:
   description: >
-    Generate recipes using the filtered ingredients, nutritional analysis,
-    dietary restrictions, and calorie goal. Include ingredient quantities,
-    preparation steps, serving sizes, and estimated nutrition.
+    Generate recipes using the filtered ingredients and nutritional analysis.
+    Respect dietary restrictions {dietary_restrictions}, calorie goal
+    {calorie_goal}, and serving count {servings}. Include ingredient quantities,
+    preparation steps, and estimated nutrition per serving.
   agent: recipe_suggestion_agent
   expected_output: >
-    Practical recipe suggestions with estimated nutritional values.
+    Structured recipe suggestions with ingredients, instructions, serving count,
+    estimated calories per serving, and assumptions.
